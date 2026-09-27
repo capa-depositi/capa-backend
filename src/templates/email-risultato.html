@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; color: #111827; background: #f9fafb; padding: 20px; }
+      .card { max-width: 600px; margin: 24px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+      .hero { width: 100%; height: 200px; object-fit: cover; }
+      .content { padding: 24px; }
+      .cta { display: inline-block; margin-top: 16px; background: #111827; color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
+      .muted { color: #6b7280; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img class="hero" src="{{HERO_IMAGE}}" alt="Circo CAPA" />
+      <div class="content">
+        <h2>Ciao {{NOME}}</h2>
+        <p>Il tuo risultato è pronto: puoi visualizzarlo cliccando il pulsante qui sotto. Il link sarà valido per {{SCADENZA_GIORNI}} giorni.</p>
+        <a class="cta" href="{{LINK_RISULTATO}}">Vedi il risultato</a>
+        <p class="muted">Se non hai richiesto questo link, ignora questa email.</p>
+      </div>
+    </div>
+  </body>
+</html>
