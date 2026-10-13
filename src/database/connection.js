@@ -85,6 +85,9 @@ let pool = null;
 
 export function getDatabase() {
   if (!pool) {
+    if (!process.env.DATABASE_URL) {
+      console.error('DATABASE_URL is not set: configure it (and DB_PASSWORD if it contains REPLACE_ME) in the environment variables.');
+    }
     const poolConfig = { connectionString: process.env.DATABASE_URL };
 
     // For development/testing you can allow insecure TLS by setting
