@@ -1,83 +1,112 @@
 import { getDatabase } from '../database/connection.js';
 
-// Business logic per calcolo interessi. Questa versione segue la logica originale del progetto "capa".
 export const interestService = {
+  // Calcola gli interessi sul deposito cauzionale (affittuario è l'unico ruolo)
   async calculate(profileId) {
-    if (!profileId) throw new Error('Profile not found');
-
     const pool = getDatabase();
 
-    // Recupera tutte le risposte per il profilo
+    // 1. Verifica che il profilo esista
+    const profileRes = await pool.query('SELECT * FROM profiles WHERE id = $1', [profileId]);
+    const profile = profileRes.rows[0];
+    if (!profile) throw new Error('Profile not found');
+
+    // Converte in oggetto per facile accesso
     const answersRes = await pool.query('SELECT * FROM answers WHERE profile_id = $1', [profileId]);
     const answers = answersRes.rows;
 
-    if (!answers || answers.length === 0) throw new Error('Incomplete questionnaire');
+    const answersMap = {};
+    answers.forEach(answer => { answersMap[answer.question_id] = answer.answer_value; });
 
-    // Mappa delle risposte per accesso rapido
-    const map = new Map();
-    for (const a of answers) {
-      map.set(a.question_id, a.answer_value);
+    // 2. answersMap already populated above
+
+    // 3. Verifica che il questionario sia completato
+    if (answersMap['Q4_AFF'] === 'No') {
+      return {
+        deposit: 0,
+        interest: 0,
+        message: 'Non hai versato deposito cauzionale, quindi non sono previsti interessi.'
+      };
     }
 
-    // Estrai campi necessari dal questionario
-    const importoStr = map.get('importo');
-    const depositDate = map.get('data_deposito');
-
-    if (!importoStr || !depositDate) throw new Error('Incomplete questionnaire');
-
-    const importo = Number(importoStr);
-    const depositDateObj = new Date(depositDate);
-    if (Number.isNaN(importo) || Number.isNaN(depositDateObj.getTime())) throw new Error('Invalid deposit date');
-
-    // Recupera i legal_rates ordinati per data
-    const ratesRes = await pool.query('SELECT * FROM legal_rates ORDER BY dal ASC');
-    const rates = ratesRes.rows;
-
-    if (!rates || rates.length === 0) throw new Error('No legal rates configured');
-
-    // Calcolo iterativo degli interessi usando i tassi della tabella
-    const results = [];
-
-    let currentDate = depositDateObj;
-    let remaining = importo;
-
-    for (let i = 0; i < rates.length; i++) {
-      const rate = rates[i];
-      const nextRateStart = i + 1 < rates.length ? new Date(rates[i + 1].dal) : null;
-
-      const segmentStart = currentDate;
-      const segmentEnd = nextRateStart || new Date();
-
-      // Calcolo giorni nel segmento
-      const days = Math.max(0, Math.ceil((segmentEnd - segmentStart) / (1000 * 60 * 60 * 24)));
-
-      if (days <= 0) continue;
-
-      const yearlyRate = Number(rate.tasso_percentuale) / 100;
-
-      // Semplice interesse prorata temporis
-      const interest = remaining * yearlyRate * (days / 365);
-
-      results.push({
-        from: segmentStart.toISOString().slice(0, 10),
-        to: (segmentEnd).toISOString().slice(0, 10),
-        days,
-        rate: yearlyRate,
-        interest: Number(interest.toFixed(2))
-      });
-
-      // Avanza la data corrente
-      currentDate = segmentEnd;
+    // Verifica risposte obbligatorie
+    const requiredQuestions = ['Q1_AFF', 'Q4_AFF', 'Q5_AFF', 'Q6_AFF'];
+    for (const q of requiredQuestions) {
+      if (!answersMap[q]) {
+        throw new Error('Incomplete questionnaire');
+      }
     }
 
-    const totalInterest = results.reduce((s, r) => s + r.interest, 0);
+    // 4. Calcola il deposito cauzionale
+    const monthlyRent = parseFloat(answersMap['Q1_AFF']);
+    const months = parseInt(answersMap['Q6_AFF']);
+    const deposit = monthlyRent * months;
+
+    // 5. Ottieni la data di versamento
+    const depositDate = new Date(answersMap['Q5_AFF']);
+    if (Number.isNaN(depositDate.getTime())) {
+      throw new Error('Invalid deposit date');
+    }
+
+    const today = new Date();
+    if (depositDate > today) {
+      return {
+        deposit,
+        interest: 0,
+        years: 0,
+        monthlyRent,
+        months,
+        depositDate: depositDate.toISOString().split('T')[0],
+        message: 'La data del deposito è nel futuro. Inserisci una data valida in passato.'
+      };
+    }
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const totalDays = Math.floor((today.getTime() - depositDate.getTime()) / msPerDay);
+
+    if (totalDays < 1) {
+      return {
+        deposit,
+        interest: 0,
+        years: 0,
+        monthlyRent,
+        months,
+        depositDate: depositDate.toISOString().split('T')[0],
+        message: 'Il deposito è stato versato recentemente, non sono ancora maturati interessi.'
+      };
+    }
+
+    const yearsElapsed = Math.floor(totalDays / 365.25);
+
+    let totalInterest = 0;
+    let segmentStart = new Date(depositDate);
+
+    while (segmentStart < today) {
+      const segmentYear = segmentStart.getFullYear();
+      const nextYearStart = new Date(segmentYear + 1, 0, 1);
+      const segmentEnd = nextYearStart < today ? nextYearStart : today;
+      const segmentDays = Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / msPerDay);
+
+      const legalRate = await this.getLegalRateForYear(segmentYear);
+      totalInterest += deposit * (legalRate / 100) * (segmentDays / 365.25);
+
+      segmentStart = segmentEnd;
+    }
 
     return {
-      profileId,
-      importo,
-      calculatedAt: new Date().toISOString(),
-      totalInterest: Number(totalInterest.toFixed(2)),
-      breakdown: results
+      deposit,
+      interest: Math.round(totalInterest * 100) / 100,
+      years: yearsElapsed,
+      monthlyRent,
+      months,
+      depositDate: depositDate.toISOString().split('T')[0]
     };
+  },
+
+  // Ottieni il tasso legale per un anno specifico
+  async getLegalRateForYear(year) {
+    const pool = getDatabase();
+    const res = await pool.query('SELECT rate FROM legal_rates WHERE year = $1', [year]);
+    if (!res.rows[0]) return 0.5; // default
+    return res.rows[0].rate;
   }
 };
