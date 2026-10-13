@@ -5,12 +5,22 @@ import { profilesController } from './controllers/profiles.js';
 
 // Configurazione server
 const PORT = process.env.PORT || 3001;
-const HOST = 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
+// Origini consentite (separate da virgola), es. https://capa-frontend.vercel.app
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim().replace(/\/$/, ''))
+  .filter(Boolean);
 
 // Crea il server HTTP
 const server = http.createServer(async (req, res) => {
   // Headers CORS per permettere richieste dal frontend
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  const origin = req.headers.origin;
+  res.setHeader(
+    'Access-Control-Allow-Origin',
+    ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  );
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
@@ -50,7 +60,7 @@ const server = http.createServer(async (req, res) => {
 
 // Avvia il server
 server.listen(PORT, HOST, () => {
-  console.log(`🚀 CAPA Backend server running at http://${HOST}:${PORT}`);
+  console.log(`🚀 CAPA Backend server listening on ${HOST}:${PORT}`);
   console.log(`📊 Database: PostgreSQL (pg)`);
   console.log(`🔐 Auth: JWT tokens`);
   console.log(`✅ Validation: Zod schemas`);
