@@ -1,9 +1,7 @@
 import { interestService } from '../services/interest.js';
 import { parseRequestBody } from '../utils/request.js';
 import { calculateInterestSchema } from '../validation/schemas.js';
-import { resultTokensService } from '../services/resultTokens.js';
-import { emailService } from '../services/email.js';
-import { profilesService } from '../services/profiles.js';
+import { submissionsService } from '../services/submissions.js';
 
 export const interestController = {
   // POST /api/calculate-interest
@@ -13,7 +11,8 @@ export const interestController = {
       const validatedData = calculateInterestSchema.parse(body);
 
       // Calcola gli interessi
-      const result = await interestService.calculate(validatedData.profileId);
+      const result = await interestService.calculate(validatedData.submissionId);
+      const submission = await submissionsService.getById(validatedData.submissionId);
 
       if (result === undefined || result === null) {
         // Ensure we always return a valid JSON body
@@ -23,25 +22,12 @@ export const interestController = {
       }
 
       res.writeHead(200);
-      res.end(JSON.stringify(result));
-
-      // Invia (una tantum) l'email col link per rivedere il risultato in futuro
-      try {
-        const tokenInfo = await resultTokensService.getOrCreate(validatedData.profileId);
-        if (tokenInfo.isNew) {
-          const profile = await profilesService.findById(validatedData.profileId);
-          if (profile?.email) {
-            await emailService.sendResultEmail({
-              to: profile.email,
-              nome: profile.nome,
-              token: tokenInfo.token,
-              ttlDays: tokenInfo.ttlDays
-            });
-          }
-        }
-      } catch (emailError) {
-        console.error('Invio email risultato fallito:', emailError);
-      }
+      res.end(JSON.stringify({
+        submissionId: validatedData.submissionId,
+        submissionStatus: submission.status,
+        emailStatus: submission.email_status,
+        ...result
+      }));
 
     } catch (error) {
       console.error('Interest calculation error:', error);
@@ -52,9 +38,9 @@ export const interestController = {
           error: 'Validation error',
           details: error.errors
         }));
-      } else if (error.message === 'Profile not found') {
+      } else if (error.message === 'Submission not found') {
         res.writeHead(404);
-        res.end(JSON.stringify({ error: 'Profile not found' }));
+        res.end(JSON.stringify({ error: 'Submission not found' }));
       } else if (error.message === 'Invalid deposit date') {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'Data deposito non valida' }));

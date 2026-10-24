@@ -6,6 +6,7 @@ import { questionsController } from '../controllers/questions.js';
 import { answersController } from '../controllers/answers.js';
 import { interestController } from '../controllers/interest.js';
 import { resultsController } from '../controllers/results.js';
+import { submissionsController } from '../controllers/submissions.js';
 
 // Router object: { METHOD: { PATH: handler } }
 export const router = {
@@ -13,11 +14,13 @@ export const router = {
     '/api/profiles': profilesController.create,
     '/api/profiles/login': profilesController.login,
     '/api/answers': answersController.save,
+    '/api/submissions': submissionsController.create,
+    '/api/submissions/:submissionId/complete': submissionsController.complete,
     '/api/calculate-interest': interestController.calculate
   },
   GET: {
     '/api/questions/:role': questionsController.getByRole,
-    '/api/answers/:profileId': answersController.getByProfileId,
+    '/api/answers/:submissionId': answersController.getBySubmissionId,
     '/api/risultato/:token': resultsController.getByToken,
     '/api/health': (req, res) => {
       res.writeHead(200);

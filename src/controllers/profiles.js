@@ -52,14 +52,11 @@ export const profilesController = {
         return;
       }
 
-      const isCompleted = await profilesService.isQuestionnaireCompleted(profile.id);
-
       res.writeHead(200);
       res.end(JSON.stringify({
         success: true,
         profileId: profile.id,
-        role: profile.ruolo,
-        questionnaireCompleted: isCompleted
+        role: profile.ruolo
       }));
     } catch (error) {
       console.error('Profile login error:', error);

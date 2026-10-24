@@ -1,19 +1,12 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import { Pool } from 'pg';
+import { getDatabase, closeDatabase } from '../src/database/connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.join(__dirname, '../../database/.env') });
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL not set in database/.env');
-  process.exit(1);
-}
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = getDatabase();
 
 (async () => {
   console.log('Profiles:');
@@ -21,12 +14,16 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   console.table(profiles.rows);
 
   console.log('\nAnswers:');
-  const answers = await pool.query('SELECT id, profile_id, question_id, answer_value FROM answers');
+  const answers = await pool.query('SELECT id, submission_id, question_id, answer_value FROM answers');
   console.table(answers.rows);
 
+  console.log('\nQuestionnaire submissions:');
+  const submissions = await pool.query('SELECT id, profile_id, status, email_status, email_error, created_at FROM questionnaire_submissions');
+  console.table(submissions.rows);
+
   console.log('\nResult tokens:');
-  const tokens = await pool.query(`SELECT profile_id, view_count, last_viewed_at, expires_at FROM result_tokens`);
+  const tokens = await pool.query(`SELECT submission_id, view_count, last_viewed_at, expires_at FROM result_tokens`);
   console.table(tokens.rows);
 
-  await pool.end();
+  await closeDatabase();
 })();

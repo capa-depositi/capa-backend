@@ -17,12 +17,16 @@ export const loginSchema = z.object({
 
 // Schema per salvare una risposta
 export const saveAnswerSchema = z.object({
-  profileId: z.string().uuid('Profile ID non valido'),
+  submissionId: z.string().uuid('Submission ID non valido'),
   questionId: z.string().min(1, 'Question ID obbligatorio'),
   value: z.string().min(1, 'Risposta obbligatoria')
 });
 
+export const createSubmissionSchema = z.object({
+  profileId: z.string().uuid('Profile ID non valido')
+});
+
 // Schema per il calcolo degli interessi
 export const calculateInterestSchema = z.object({
-  profileId: z.string().uuid('Profile ID non valido')
+  submissionId: z.string().uuid('Submission ID non valido')
 });

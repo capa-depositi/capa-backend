@@ -1,6 +1,7 @@
 import { resultTokensService } from '../services/resultTokens.js';
 import { interestService } from '../services/interest.js';
 import { extractParams } from '../routes/index.js';
+import { submissionsService } from '../services/submissions.js';
 
 export const resultsController = {
   // GET /api/risultato/:token — usato dal link nell'email per rivedere il risultato
@@ -28,10 +29,16 @@ export const resultsController = {
         return;
       }
 
-      const result = await interestService.calculate(resolved.profileId);
+      const result = await interestService.calculate(resolved.submissionId);
+      const submission = await submissionsService.getById(resolved.submissionId);
 
       res.writeHead(200);
-      res.end(JSON.stringify({ profileId: resolved.profileId, ...result }));
+      res.end(JSON.stringify({
+        submissionId: resolved.submissionId,
+        submissionStatus: submission.status,
+        emailStatus: submission.email_status,
+        ...result
+      }));
     } catch (error) {
       console.error('Result token fetch error:', error);
       res.writeHead(500);

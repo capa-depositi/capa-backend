@@ -4,25 +4,36 @@ export const answersService = {
   // Salva una risposta al questionario
   async save(answerData) {
     const pool = getDatabase();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const submissionRes = await client.query(
+        'SELECT status FROM questionnaire_submissions WHERE id = $1 FOR UPDATE',
+        [answerData.submissionId]
+      );
+      if (!submissionRes.rows[0]) throw new Error('Submission not found');
+      if (submissionRes.rows[0].status !== 'in_progress') throw new Error('Submission is complete');
 
-    // Verifica che il profilo esista
-    const profileRes = await pool.query('SELECT id FROM profiles WHERE id = $1', [answerData.profileId]);
-    if (!profileRes.rows[0]) throw new Error('Profile not found');
-
-    const existingRes = await pool.query('SELECT id FROM answers WHERE profile_id = $1 AND question_id = $2', [answerData.profileId, answerData.questionId]);
-
-    if (existingRes.rows[0]) {
-      await pool.query('UPDATE answers SET answer_value = $1, created_at = now() WHERE id = $2', [answerData.value, existingRes.rows[0].id]);
-      return;
+      await client.query(
+        `INSERT INTO answers (submission_id, question_id, answer_value, created_at)
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT (submission_id, question_id)
+         DO UPDATE SET answer_value = EXCLUDED.answer_value, created_at = now()`,
+        [answerData.submissionId, answerData.questionId, answerData.value]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    await pool.query('INSERT INTO answers (profile_id, question_id, answer_value, created_at) VALUES ($1, $2, $3, now())', [answerData.profileId, answerData.questionId, answerData.value]);
   },
 
-  // Ottieni tutte le risposte per un profilo
-  async getByProfileId(profileId) {
+  // Ottieni tutte le risposte per una submission
+  async getBySubmissionId(submissionId) {
     const pool = getDatabase();
-    const res = await pool.query('SELECT * FROM answers WHERE profile_id = $1 ORDER BY created_at', [profileId]);
+    const res = await pool.query('SELECT * FROM answers WHERE submission_id = $1 ORDER BY created_at', [submissionId]);
     return res.rows;
   }
 };

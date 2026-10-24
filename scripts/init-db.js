@@ -1,26 +1,22 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import { Pool } from 'pg';
+import { getDatabase, closeDatabase } from '../src/database/connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load DATABASE_URL from database/.env
-dotenv.config({ path: path.join(__dirname, '../../database/.env') });
-
 if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL not set in database/.env');
+  console.error('DATABASE_URL is not configured in the backend or capa-database .env file.');
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = getDatabase();
 
 console.log('🚀 Inizializzazione database CAPA (Postgres) — applicando migrazioni SQL...');
 
-// The project's canonical migrations live in `database/` root per repo convention
-const migrationsDir = path.join(__dirname, '../../database');
+// CAPA's schema baseline and seed files live in the sibling capa-database directory.
+const migrationsDir = path.join(__dirname, '../../capa-database');
 
 async function applyMigrations() {
   if (!fs.existsSync(migrationsDir)) {
@@ -36,12 +32,25 @@ async function applyMigrations() {
         created_at TIMESTAMPTZ DEFAULT now()
       );
 
+      CREATE TABLE IF NOT EXISTS questionnaire_submissions (
+        id UUID PRIMARY KEY,
+        profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        completed_at TIMESTAMPTZ,
+        email_status TEXT NOT NULL DEFAULT 'not_sent' CHECK (email_status IN ('not_sent', 'sending', 'sent', 'failed')),
+        email_attempted_at TIMESTAMPTZ,
+        email_attempt_id UUID,
+        email_error TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS answers (
         id SERIAL PRIMARY KEY,
-        profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        submission_id UUID NOT NULL REFERENCES questionnaire_submissions(id) ON DELETE CASCADE,
         question_id TEXT NOT NULL,
         answer_value TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT now()
+        created_at TIMESTAMPTZ DEFAULT now(),
+        CONSTRAINT uq_submission_question UNIQUE (submission_id, question_id)
       );
 
       CREATE TABLE IF NOT EXISTS questions (
@@ -62,7 +71,7 @@ async function applyMigrations() {
 
       CREATE TABLE IF NOT EXISTS result_tokens (
         id SERIAL PRIMARY KEY,
-        profile_id UUID NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+        submission_id UUID NOT NULL REFERENCES questionnaire_submissions(id) ON DELETE CASCADE,
         token_hash TEXT NOT NULL UNIQUE,
         created_at TIMESTAMPTZ DEFAULT now(),
         expires_at TIMESTAMPTZ NOT NULL,
@@ -70,7 +79,9 @@ async function applyMigrations() {
         last_viewed_at TIMESTAMPTZ
       );
 
-      CREATE INDEX IF NOT EXISTS idx_result_tokens_profile ON result_tokens(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_questionnaire_submissions_profile_id ON questionnaire_submissions(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_answers_submission_id ON answers(submission_id);
+      CREATE INDEX IF NOT EXISTS idx_result_tokens_submission ON result_tokens(submission_id);
     `);
     console.log('✅ Inline tables created');
     return;
@@ -101,8 +112,8 @@ try {
   console.log('✅ Database initialized successfully.');
 } catch (err) {
   console.error('❌ Migration failed:', err.message);
-  await pool.end();
+  await closeDatabase();
   process.exit(1);
 }
 
-await pool.end();
+await closeDatabase();

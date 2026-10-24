@@ -8,22 +8,22 @@ function hashToken(token) {
 }
 
 export const resultTokensService = {
-  // Crea il token di accesso al risultato per il profilo, se non esiste già (invio email una tantum)
-  async getOrCreate(profileId) {
+  // Create a fresh link for each email attempt so failed sends can be retried.
+  async create(submissionId) {
     const pool = getDatabase();
-    const existingRes = await pool.query('SELECT id FROM result_tokens WHERE profile_id = $1', [profileId]);
-    if (existingRes.rows[0]) return { isNew: false };
-
     const token = randomBytes(32).toString('base64url');
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    await pool.query('INSERT INTO result_tokens (profile_id, token_hash, expires_at) VALUES ($1, $2, $3)', [profileId, tokenHash, expiresAt]);
+    await pool.query(
+      'INSERT INTO result_tokens (submission_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [submissionId, tokenHash, expiresAt]
+    );
 
-    return { isNew: true, token, expiresAt, ttlDays: TOKEN_TTL_DAYS };
+    return { token, expiresAt, ttlDays: TOKEN_TTL_DAYS };
   },
 
-  // Risolve un token in chiaro nel profilo associato e conta la visita come un "ritorno"
+  // Resolve a result link and count the visit.
   async resolve(token) {
     const pool = getDatabase();
     const tokenHash = hashToken(token);
@@ -35,13 +35,12 @@ export const resultTokensService = {
 
     await pool.query('UPDATE result_tokens SET view_count = view_count + 1, last_viewed_at = now() WHERE id = $1', [record.id]);
 
-    return { profileId: record.profile_id };
+    return { submissionId: record.submission_id };
   },
 
-  // Quante volte l'utente è tornato a rivedere il risultato tramite il link (0 = mai)
-  async getReturnCount(profileId) {
+  async getReturnCount(submissionId) {
     const pool = getDatabase();
-    const res = await pool.query('SELECT view_count FROM result_tokens WHERE profile_id = $1', [profileId]);
-    return res.rows[0] ? res.rows[0].view_count : 0;
+    const res = await pool.query('SELECT COALESCE(SUM(view_count), 0) AS view_count FROM result_tokens WHERE submission_id = $1', [submissionId]);
+    return Number(res.rows[0].view_count);
   }
 };

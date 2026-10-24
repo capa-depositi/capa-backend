@@ -34,19 +34,19 @@ export const answersController = {
     }
   },
 
-  // GET /api/answers/:profileId
-  async getByProfileId(req, res) {
+  // GET /api/answers/:submissionId
+  async getBySubmissionId(req, res) {
     try {
-      const params = extractParams(req.url.split('?')[0], '/api/answers/:profileId');
-      const { profileId } = params;
+      const params = extractParams(req.url.split('?')[0], '/api/answers/:submissionId');
+      const { submissionId } = params;
 
-      if (!profileId) {
+      if (!submissionId) {
         res.writeHead(400);
-        res.end(JSON.stringify({ error: 'Profile ID required' }));
+        res.end(JSON.stringify({ error: 'Submission ID required' }));
         return;
       }
 
-      const answers = await answersService.getByProfileId(profileId);
+      const answers = await answersService.getBySubmissionId(submissionId);
 
       res.writeHead(200);
       res.end(JSON.stringify(answers));

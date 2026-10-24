@@ -8,13 +8,16 @@ export const profilesService = {
 
     const profileId = uuidv4();
 
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO profiles (id, nome, cognome, eta, email, ruolo, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now())`,
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (email) DO NOTHING
+       RETURNING id, nome, cognome, eta, email, ruolo`,
       [profileId, profileData.nome, profileData.cognome, profileData.eta ?? 0, profileData.email, profileData.ruolo]
     );
 
-    return { id: profileId, ...profileData };
+    if (result.rows[0]) return result.rows[0];
+    return this.findByEmail(profileData.email);
   },
 
   // Trova un profilo per ID
@@ -31,18 +34,4 @@ export const profilesService = {
     return res.rows[0];
   },
 
-  // Verifica se il questionario è completato per un profilo
-  async isQuestionnaireCompleted(profileId) {
-    const pool = getDatabase();
-    const requiredQuestions = ['Q1_AFF', 'Q4_AFF', 'Q5_AFF', 'Q6_AFF'];
-
-    const res = await pool.query('SELECT question_id FROM answers WHERE profile_id = $1', [profileId]);
-    const answeredQuestions = new Set(res.rows.map(r => r.question_id));
-
-    for (const q of requiredQuestions) {
-      if (!answeredQuestions.has(q)) return false;
-    }
-
-    return true;
-  }
 };

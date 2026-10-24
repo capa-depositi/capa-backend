@@ -9,7 +9,8 @@
     "dev": "node --watch src/server.js",
     "init-db": "node scripts/init-db.js",
     "inspect-db": "node scripts/inspect-db.js",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "test:submission-rules": "node --test tests/submissionRules.test.js"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

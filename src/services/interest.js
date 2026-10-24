@@ -1,42 +1,35 @@
 import { getDatabase } from '../database/connection.js';
+import { isSubmissionComplete } from './submissionRules.js';
 
 export const interestService = {
-  // Calcola gli interessi sul deposito cauzionale (affittuario è l'unico ruolo)
-  async calculate(profileId) {
+  // Calcola gli interessi per una singola submission.
+  async calculate(submissionId) {
     const pool = getDatabase();
 
-    // 1. Verifica che il profilo esista
-    const profileRes = await pool.query('SELECT * FROM profiles WHERE id = $1', [profileId]);
-    const profile = profileRes.rows[0];
-    if (!profile) throw new Error('Profile not found');
+    const submissionRes = await pool.query(
+      `SELECT s.status
+       FROM questionnaire_submissions s
+       WHERE s.id = $1`,
+      [submissionId]
+    );
+    const submission = submissionRes.rows[0];
+    if (!submission) throw new Error('Submission not found');
 
-    // Converte in oggetto per facile accesso
-    const answersRes = await pool.query('SELECT * FROM answers WHERE profile_id = $1', [profileId]);
+    const [answersRes, questionsRes] = await Promise.all([
+      pool.query('SELECT * FROM answers WHERE submission_id = $1', [submissionId]),
+      pool.query('SELECT id, required, depends_on, depends_value FROM questions ORDER BY id')
+    ]);
     const answers = answersRes.rows;
+    const answersByQuestion = new Map(answers.map(answer => [answer.question_id, answer.answer_value]));
 
     const answersMap = {};
     answers.forEach(answer => { answersMap[answer.question_id] = answer.answer_value; });
 
-    // 2. answersMap already populated above
-
-    // 3. Verifica che il questionario sia completato
-    if (answersMap['Q4_AFF'] === 'No') {
-      return {
-        deposit: 0,
-        interest: 0,
-        message: 'Non hai versato deposito cauzionale, quindi non sono previsti interessi.'
-      };
+    if (submission.status !== 'completed' || !isSubmissionComplete(questionsRes.rows, answersByQuestion)) {
+      throw new Error('Incomplete questionnaire');
     }
 
-    // Verifica risposte obbligatorie
-    const requiredQuestions = ['Q1_AFF', 'Q4_AFF', 'Q5_AFF', 'Q6_AFF'];
-    for (const q of requiredQuestions) {
-      if (!answersMap[q]) {
-        throw new Error('Incomplete questionnaire');
-      }
-    }
-
-    // 4. Calcola il deposito cauzionale
+    // Calcola il deposito cauzionale
     const monthlyRent = parseFloat(answersMap['Q1_AFF']);
     const months = parseInt(answersMap['Q6_AFF']);
     const deposit = monthlyRent * months;

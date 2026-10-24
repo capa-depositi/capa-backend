@@ -27,7 +27,7 @@ export const emailService = {
 
     if (!resend) {
       console.warn(`RESEND_API_KEY non configurata: email non inviata (dev mode). Link risultato: ${link}`);
-      return { sent: false };
+      return { sent: false, error: 'RESEND_API_KEY non configurata' };
     }
 
     const { error } = await resend.emails.send({
