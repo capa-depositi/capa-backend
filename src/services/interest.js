@@ -71,6 +71,7 @@ export const interestService = {
     const yearsElapsed = Math.floor(totalDays / 365.25);
 
     let totalInterest = 0;
+    const yearlyBreakdown = [];
     let segmentStart = new Date(depositDate);
 
     while (segmentStart < today) {
@@ -80,7 +81,14 @@ export const interestService = {
       const segmentDays = Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / msPerDay);
 
       const legalRate = await this.getLegalRateForYear(segmentYear);
-      totalInterest += deposit * (legalRate / 100) * (segmentDays / 365.25);
+      const segmentInterest = deposit * (legalRate / 100) * (segmentDays / 365.25);
+      totalInterest += segmentInterest;
+      yearlyBreakdown.push({
+        year: segmentYear,
+        rate: legalRate,
+        days: segmentDays,
+        interest: Math.round(segmentInterest * 100) / 100
+      });
 
       segmentStart = segmentEnd;
     }
@@ -91,7 +99,8 @@ export const interestService = {
       years: yearsElapsed,
       monthlyRent,
       months,
-      depositDate: depositDate.toISOString().split('T')[0]
+      depositDate: depositDate.toISOString().split('T')[0],
+      yearlyBreakdown
     };
   },
 
