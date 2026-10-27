@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const CONFIG = {
   appUrl: process.env.APP_URL || 'http://localhost:3000',
-  fromEmail: process.env.FROM_EMAIL || 'CAPA <noreply@capadeposito.com>',
+  fromEmail: process.env.FROM_EMAIL || 'CAPA <noreply@capadepositi.com>',
   apiKey: process.env.RESEND_API_KEY || ''
 };
 
