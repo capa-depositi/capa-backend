@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const CONFIG = {
   appUrl: process.env.APP_URL || 'http://localhost:3000',
-  fromEmail: process.env.FROM_EMAIL || 'Circo CAPA <onboarding@resend.dev>',
+  fromEmail: process.env.FROM_EMAIL || 'CAPA <noreply@capadeposito.com>',
   apiKey: process.env.RESEND_API_KEY || ''
 };
 
@@ -23,7 +23,7 @@ export const emailService = {
       .replaceAll('{{NOME}}', nome || '')
       .replaceAll('{{LINK_RISULTATO}}', link)
       .replaceAll('{{SCADENZA_GIORNI}}', String(ttlDays))
-      .replaceAll('{{HERO_IMAGE}}', `${CONFIG.appUrl}/circo.jpeg`);
+      .replaceAll('{{HERO_IMAGE}}', `${CONFIG.appUrl}/email-hero.jpg`);
 
     if (!resend) {
       console.warn(`RESEND_API_KEY non configurata: email non inviata (dev mode). Link risultato: ${link}`);
@@ -33,7 +33,7 @@ export const emailService = {
     const { error } = await resend.emails.send({
       from: CONFIG.fromEmail,
       to,
-      subject: '🎪 Il tuo risultato è pronto — Circo CAPA',
+      subject: '🎪 Il tuo risultato è pronto',
       html
     });
 
